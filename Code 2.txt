@@ -1,0 +1,464 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Jun  6 20:33:41 2022
+
+@author: Paulo Figueroa
+"""
+import numpy as np
+#import matplotlib.pyplot as plt
+#from sklearn.datasets import load_boston
+import random
+
+
+
+###############################################################################
+
+class Problema:
+    def __init__(self, M, Tik, R, Pi, A, Bk, MTBFk, c, lb, ub):
+        # atributos de la clase
+        self.M = M
+        self.MT = np.transpose(self.M)
+        self.Tik=Tik
+        self.TikT=np.transpose(self.Tik)
+        self.m = len(self.MT)
+        self.R = R
+        self.n=len(self.R)
+        self.Pi=Pi
+        self.A=A
+        self.Aij= []
+        self.Bk=Bk
+        self.MTBFk=MTBFk
+        self.c = c
+        self.lb = lb
+        self.ub = ub
+        
+        
+###############################################################################
+        
+    def limpiarAij(self):
+        contador=0
+        Aij = []
+        for i in range(len(self.R)):
+            aij=[]
+            for j in range(self.R[i]):
+                aij.append(self.A[contador])
+                contador=contador+1
+            Aij.append(aij)
+        return Aij
+
+###############################################################################    
+    
+    def generarSolucion(self):
+        
+        #GENERACIÓN DE SOLUCIONES FACTIBLES
+
+        ##Selección aleatoria de ruta j por parte i
+        
+        Zij=[]
+        rn=[]
+        vz=[]
+        for i in range(len(self.R)):
+            z=[]  
+            for j in range(self.R[i]):
+                Sz=0
+                for w in range(len(z)):
+                    Sz=Sz+z[w]
+                if Sz==1:
+                    z.append(0)
+                    vz.append(0)
+                elif j==(self.R[i]-1): #La última ruta obligatoriamente debe ser 1
+                    z.append(1)
+                    rn.append(j+1)
+                    vz.append(1)
+                else:
+                    aleatorio=random.randint(0, 1)
+                    z.append(aleatorio)
+                    if aleatorio==1:
+                        rn.append(j+1)
+                        vz.append(1)
+                    else:
+                        vz.append(0)
+                    #print(z)   
+            Zij.append(z)
+#_____________________________________________________________________________#
+        
+        ##Selección aleatoria de celda l por máquina m
+        
+        if self.c==self.m: #Antierror de generación de solución inicial
+            cpm=[]
+            for k in range(self.m):
+                cpm.append(k+1)
+            Ykl=[]
+            vy=[]
+            cm=[]
+            for i in range(self.m):
+                y=[]
+                ale=random.choice(cpm)
+                cm.append(ale)
+                cpm.remove(ale)
+                for j in range(self.m):
+                    if j+1==ale:
+                        y.append(1)
+                        vy.append(1)
+                    else:
+                        y.append(0)
+                        vy.append(0)
+                Ykl.append(y)
+        else:
+            contador=0
+            intento=0
+            while contador==0:
+                Ykl=[]
+                vy=[]
+                cm=[]
+                vb=[]
+                for k in range(self.m):
+                    y=[]
+                    for l in range(self.c):
+                        Sy=0
+                        for w in range(len(y)):
+                            Sy=Sy+y[w]
+                        if Sy==1:
+                            y.append(0)
+                            vy.append(0)
+                        elif l==(self.c-1): #La última celda obligatoriamente debe ser 1
+                            y.append(1)
+                            cm.append(l+1)
+                            vy.append(1)
+                        else:
+                            aleatorio=random.randint(0, 1)
+                            y.append(aleatorio)
+                            if aleatorio==1:
+                                cm.append(l+1)
+                                vy.append(1)
+                            else:
+                                vy.append(0) 
+                    Ykl.append(y)
+                for l in range(self.c):
+                    sulb=0
+                    for k in range(self.m):
+                        sulb=sulb+Ykl[k][l]
+                    if sulb>=self.lb: #Límite inferior de número de máquinas por celda
+                        vb.append(1)
+                    else:
+                        vb.append(0)
+                    if sulb<=self.ub: #Límite superior de número de máquinas por celda
+                        vb.append(1)
+                    else:
+                        vb.append(0)
+                svb=0
+                for i in range(len(vb)):
+                    svb=svb+vb[i]
+                if svb==len(vb):
+                    contador=1
+                else:
+                    contador=0
+                intento=intento+1
+        
+#_____________________________________________________________________________#
+        
+        ##Generación de vector solución S (vz+vy ó Zij+Ykl)
+        
+        S=[]
+        for j in range(len(vz)):
+            S.append(vz[j])
+        for l in range(len(vy)):
+            S.append(vy[l])
+        return S
+
+###############################################################################
+    
+    def calcularFitness(self, S):
+        
+        #CÁLCULO DE FITNESS (func)
+
+        ##Parámetros generados para evaluar el fitness
+        
+        ###Generación de datos para descomprimir S (Zij, Ykl, rn, cm, vz, vy)
+        
+        pos=0
+        Zij=[]
+        vz=[]
+        rn=[]
+        self.Aij = self.limpiarAij()
+        
+        for i in range(self.n):
+            z=[]
+            for j in range(self.R[i]):
+                z.append(S[pos])
+                vz.append(S[pos])
+                if S[pos]!=0:
+                    rn.append(j+1)
+                pos=pos+1
+            Zij.append(z)
+        Ykl=[]
+        vy=[]
+        cm=[]
+        for k in range(self.m):
+            y=[]
+            for l in range(self.c):
+                y.append(S[pos])
+                vy.append(S[pos])
+                if S[pos]!=0:
+                    cm.append(l+1)
+                pos=pos+1
+            Ykl.append(y)
+        
+        ###Matriz de rutas
+        
+        AR=[]
+        for i in range(len(vz)):
+            if vz[i]==1:
+                #print(M[i])
+                AR.append(self.M[i])
+            else:
+                AR=AR
+        
+        ###Vectorización de matriz AR
+        
+        RA=[]
+        for i in range(self.n):
+            ar=[]
+            for j in range(self.m):
+                if type(AR[i][j])==int:
+                    a=[]
+                    a.append(AR[i][j])
+                    ar.append(a)
+                else:
+                    ar.append(AR[i][j])
+            RA.append(ar)
+        
+        ###Costos seleccionados de MIC de la pieza i en la ruta j
+        
+        AX=[]
+        for i in range(len(self.Aij)):
+            for j in range(len(self.Aij[i])):
+                if j==rn[i]-1:
+                    AX.append(self.Aij[i][j])
+        
+        ###Matriz de costos seleccionados de tiempo de producción de la pieza i en la ruta j
+        
+        AT=[]
+        for i in range(len(vz)):
+            if vz[i]==1:
+                AT.append(self.Tik[i])
+            else:
+                AT=AT
+        
+#_____________________________________________________________________________#
+        
+        ##Contador de MIC:X_ijklsl
+        
+        Ukl=[]
+        XCost=[]
+        for i in range(self.n):
+            U=[]
+            for j in range(self.m):
+                if len(RA[i][j])>1: #Si la máquina k (j en este caso) tiene re-procesos
+                    for w in range(len(RA[i][j])):
+                        u=[]
+                        u.append(i+1) #Número de parte i
+                        u.append(rn[i]) #Número de ruta j de parte i
+                        u.append(j+1) #Número de máquina k
+                        u.append(RA[i][j][w])
+                        u.append(cm[j])
+                        U.append(u)
+                else:
+                    if AR[i][j]!=0: #Si la máquina k (j en este caso) solo tiene un proceso
+                        u=[]
+                        u.append(i+1) #Número de parte i
+                        u.append(rn[i]) #Número de ruta j de parte i
+                        u.append(j+1) #Número de máquina k
+                        u.append(AR[i][j])
+                        u.append(cm[j])
+                        U.append(u)      
+            Ukl.append(U)    
+            mic=0
+            for w in range(1, len(U)): #Cantidad de MIC
+                for i in range(len(U)):
+                    if U[i][3]==w:
+                        for j in range(len(U)):
+                            if U[j][3]==w+1:
+                                if U[i][4]==U[j][4]:
+                                    mic=mic
+                                else:
+                                    mic=mic+1
+                                    #print("X_(", U[w][0], U[w][1], U[w][2], U[w][4], U[w+1][2], U[w+1][4], ") = 1")    
+            if mic==0:
+                mic=mic
+                XCost.append(0)
+            else: 
+                #print("La pieza ", i+1, " en la ruta ", rn[i], " tiene ", mic, " movimientos inter-celulares")
+                XCost.append(mic)
+        #print("La cantidad de MIC´s por pieza son los siguientes: ", XCost)
+        
+#_____________________________________________________________________________#
+        
+        ##Cálulo de parte 1 de la función objetivo
+        
+        fit1=0
+        for i in range(self.n):
+            fit1=AX[i]*self.Pi[i]*XCost[i]+fit1
+        fit2=0
+        for i in range(self.n):
+            for k in range(self.m):
+                fit2=((self.Pi[i]*AT[i][k]*self.Bk[k])/((self.MTBFk[k])*60))+fit2
+        fitness=fit1+fit2
+        return fitness
+
+###############################################################################    
+    
+    def repararSolucion(self, S):
+        
+        #REPARADOR DE SOLUCIONES S
+
+        ##Obtención del Zij y el Ykl
+        
+        Zij=[]
+        pos=0
+        for i in range(self.n):
+            z=[]
+            for j in range(self.R[i]):
+                z.append(S[pos])
+                pos=pos+1
+            Zij.append(z)
+        Ykl=[]
+        for k in range(self.m):
+            y=[]
+            for l in range(self.c):
+                y.append(S[pos])
+                pos=pos+1
+            Ykl.append(y)
+        
+#_____________________________________________________________________________#
+        
+        ##Reparador de rutas Zij
+     
+        for i in range(self.n):
+            sr=0
+            for j in range(len(Zij[i])):
+                sr=sr+Zij[i][j]
+            if sr==0:
+                ale=random.randint(0, (self.R[i]-1))
+                Zij[i][ale]=1
+            elif sr>1:
+                rj=[]
+                for j in range(len(Zij[i])):      
+                    if Zij[i][j]==1:
+                        rj.append(j)
+                    else:
+                        rj=rj
+                ale=np.random.choice(rj)
+                for j in range(len(Zij[i])):
+                    if j==ale:
+                        Zij[i][j]=1
+                    else:
+                        Zij[i][j]=0
+                        
+        ###Generador de vz reparado
+        
+        vz=[]
+        for i in range(len(Zij)):
+            for j in range(len(Zij[i])):
+                vz.append(Zij[i][j])
+        
+#_____________________________________________________________________________#
+        
+        ##Reparador de celdas Ykl
+
+        intento=1
+        contador=0
+        while contador==0:
+        
+        ###Reparador 1/2 de celdas seleccionadas por máquina
+        
+            for k in range(self.m):
+                sc=0
+                for l in range(self.c):
+                    sc=sc+Ykl[k][l]
+                if sc==0:
+                    ale=random.randint(0, (self.c-1))
+                    Ykl[k][ale]=1
+                elif sc>1:
+                    cl=[]
+                    for l in range(self.c):      
+                        if Ykl[k][l]==1:
+                            cl.append(l)
+                        else:
+                            cl=cl
+                    ale=np.random.choice(cl)
+                    for l in range(self.c):
+                        if l==ale:
+                            Ykl[k][l]=1
+                        else:
+                            Ykl[k][l]=0
+        
+        ###Reparador 2/2 de celdas según los límites superior e inferior
+        
+            vb=[]
+            posicion=[]
+            for l in range(self.c):
+                sulb=0
+                pos=[]
+                for k in range(self.m):
+                    sulb=sulb+Ykl[k][l]
+                    if Ykl[k][l]==1:
+                        pos.append(k+1)
+                posicion.append(pos)    
+                if sulb>=self.lb: #Límite inferior de número de máquinas por celda
+                    vb.append(1)
+                else:
+                    vb.append(0)
+                if sulb<=self.ub: #Límite superior de número de máquinas por celda
+                    vb.append(1)
+                else:
+                    vb.append(0)
+            svb=0
+            for i in range(len(vb)):
+                svb=svb+vb[i]
+        
+            if svb==len(vb):
+                contador=1
+            else:
+                for w in range(len(vb)):
+                    if vb[w]==0:
+                        if (w+1)%2==0:
+                            ww=int((w+1)/2)
+                            ale=random.choice(posicion[ww-1])
+                            for l in range(self.c):
+                                if Ykl[ale-1][l]==1:
+                                    Ykl[ale-1][l]=0
+                                else:
+                                    Ykl[ale-1][l]=1
+                        else:
+                            eli=posicion.copy()
+                            eli.remove(eli[int((w+2)/2)-1])
+                            ale=random.choice(eli)
+                            ale2=random.choice(ale)
+                            for l in range(self.c):
+                                if int((w+2)/2)-1==l:
+                                    Ykl[ale2-1][l]=1
+                                else:
+                                    Ykl[ale2-1][l]=0
+            intento=intento+1
+
+        ###Generador de vy reparado
+
+        vy=[]
+        for k in range(len(Ykl)):
+            for l in range(self.c):
+                vy.append(Ykl[k][l])
+        
+#_____________________________________________________________________________#
+        
+        ##Generación de vector solución S (vz+vy ó Zij+Ykl) reparado
+        
+        S=[]
+        for j in range(len(vz)):
+            S.append(vz[j])
+        for l in range(len(vy)):
+            S.append(vy[l])
+        #print(S)
+        return S
+        
+###############################################################################       
